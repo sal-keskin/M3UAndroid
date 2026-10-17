@@ -34,7 +34,18 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import java.io.File
 import java.util.concurrent.Executors
+import javax.inject.Qualifier
 import javax.inject.Singleton
+
+/**
+ * The live timeshift (rewind) buffer, kept apart from the download cache.
+ */
+@Qualifier
+@Retention(AnnotationRetention.RUNTIME)
+annotation class TimeshiftCache
+
+// about 3 minutes of a 1080p live channel; older segments are fetched again when rewound
+private const val TIMESHIFT_CACHE_BYTES = 128L * 1024 * 1024
 
 @Module
 @InstallIn(SingletonComponent::class)
@@ -122,6 +133,23 @@ object ProvidedServicesModule {
         return SimpleCache(
             downloadDirectory,
             LeastRecentlyUsedCacheEvictor(2L * 1024 * 1024 * 1024),
+            databaseProvider
+        )
+    }
+
+    // a rewind buffer only: small, in the cache dir (Android may trim it), and empty at every start
+    @Provides
+    @Singleton
+    @TimeshiftCache
+    fun provideTimeshiftCache(
+        @ApplicationContext applicationContext: Context,
+        databaseProvider: StandaloneDatabaseProvider
+    ): Cache {
+        val directory = applicationContext.cacheDir.resolve("timeshift")
+        SimpleCache.delete(directory, databaseProvider)
+        return SimpleCache(
+            directory,
+            LeastRecentlyUsedCacheEvictor(TIMESHIFT_CACHE_BYTES),
             databaseProvider
         )
     }

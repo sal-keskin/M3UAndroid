@@ -77,6 +77,7 @@ import com.m3u.data.service.MediaCommand
 import com.m3u.data.service.PlaybackSourceEvent
 import com.m3u.data.service.PlaybackSourceState
 import com.m3u.data.service.PlayerManager
+import com.m3u.data.service.TimeshiftCache
 import dagger.hilt.android.qualifiers.ApplicationContext
 import io.ktor.http.Url
 import kotlinx.coroutines.CoroutineScope
@@ -110,6 +111,7 @@ import java.io.File
 import java.io.FileOutputStream
 import java.util.UUID
 import javax.inject.Inject
+import javax.inject.Provider
 import kotlin.time.Duration.Companion.seconds
 
 class PlayerManagerImpl @Inject constructor(
@@ -121,6 +123,8 @@ class PlayerManagerImpl @Inject constructor(
     private val subscriptionProviderRepository: SubscriptionProviderRepository,
     private val linkUpdateRepository: LinkUpdateRepository,
     private val cache: Cache,
+    // created on first timeshift playback only
+    @param:TimeshiftCache private val timeshiftCache: Provider<Cache>,
     private val settings: Settings,
     publisher: Publisher,
 ) : PlayerManager, MediaSession.Callback {
@@ -470,7 +474,7 @@ class PlayerManagerImpl @Inject constructor(
             activeStreams.getOrNull(activeStreamIndex)?.sourceId != OfficialPageScanner.SOURCE_OFFICIAL
         val mediaSourceFactory = when (mimeType) {
             MimeTypes.APPLICATION_M3U8 -> HlsMediaSource.Factory(
-                if (cacheSegments) TimeshiftDataSourceFactory(dataSourceFactory, cache) else dataSourceFactory
+                if (cacheSegments) TimeshiftDataSourceFactory(dataSourceFactory, timeshiftCache.get()) else dataSourceFactory
             )
                 .setAllowChunklessPreparation(false)
                 .setExtractorFactory(DefaultHlsExtractorFactory())

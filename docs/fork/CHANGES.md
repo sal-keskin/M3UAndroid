@@ -173,6 +173,22 @@ What changed:
   `cmd package compile` command. Compiling everything (`-m speed`) was no smoother, and it cost
   0.5 s of start time and 15 MB of memory.
 
+## Storage
+
+On the Mi TV Stick (4.6 GB of storage), TR TV had filled the disk to 93 %.
+
+- **Cause.** The timeshift buffer wrote live segments into upstream's *download* cache:
+  `getExternalFilesDir()/downloads`, with a 2 GB LRU limit, never cleared. After some hours of
+  watching it held 1.9 GB.
+- **Fix.** Timeshift now has its own cache (`@TimeshiftCache`). It is capped at 128 MB (about
+  3 minutes of 1080p; older segments are fetched again when rewound), lives in `cacheDir/timeshift`
+  where Android can trim it, and is emptied when the app starts. Upstream's download cache is
+  unchanged.
+- **Cleanup.** TR TV has no downloads, so it empties the download cache on start
+  (`PlayerManager.clearCache()`). On the stick this went from 1.9 GB to 108 KB, and free storage from
+  366 MB to 2.3 GB.
+- **Logos.** The Coil disk cache is capped at 32 MB instead of 2 % of the disk.
+
 ## Phase 2: links from official live pages
 
 Some broadcasters offer their free live stream only through the player on their own website. The
