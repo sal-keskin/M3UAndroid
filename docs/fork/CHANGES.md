@@ -227,6 +227,11 @@ streams from the `official-page` and `youtube` sources.
   Settings (Home is hidden).
 - **Room:** v26 → v27 is additive. Downgrading to an upstream build would hit
   `fallbackToDestructiveMigration`.
+- **Upstream bug fixed (all apps, Android 9 and older):** `ChannelDao.deleteOrphanedMetadata` used
+  `DELETE FROM channel_metadata_bases AS base`. A table alias in `DELETE` needs SQLite 3.24, and
+  Android 9 ships 3.22. The statement failed, and the transaction that writes a playlist's channels
+  rolled back, so the list stayed empty. The alias is removed; the statement means the same on every
+  version.
 
 ## Verification
 
@@ -271,5 +276,14 @@ Results:
   playback and zapping work. After clearing app data, turning on **Links from official websites**
   resolved Show TV (`official-page`, 1080p), it played, and the Sözcü TV hand-off opened YouTube.
 
-Not verified: a physical Mi Box S (Android 9, API 28; no arm64 API-28 TV emulator image exists),
-and the registry Action on GitHub, since the registry repo is not pushed yet.
+On a real device, a Xiaomi Mi TV Stick (`MiTV-AESP0`: Android 9, API 28, `armeabi-v7a`, 1 GB RAM),
+installed over Wi-Fi ADB:
+
+- A fresh install of the release APK opens Live TV with 37 channels, and the first link update
+  succeeds. This needed the upstream SQLite fix above; before it, the list stayed at 0 channels.
+- TRT 1 plays at 1080p.
+- `dumpsys dbinfo` shows no failed SQL statements.
+
+The registry Action ran on GitHub (`sal-keskin/iptv`): it passed and committed a refreshed playlist.
+
+Not verified: a Mi Box S itself. It has the same Android 9 and 32-bit setup as the stick.
