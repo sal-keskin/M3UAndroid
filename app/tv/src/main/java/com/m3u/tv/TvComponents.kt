@@ -35,11 +35,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.Key
@@ -50,7 +48,6 @@ import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.semantics.Role
@@ -67,7 +64,6 @@ import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
@@ -80,39 +76,6 @@ import com.m3u.data.database.model.isVod
 import com.m3u.i18n.R.plurals
 import com.m3u.i18n.R.string
 import java.util.Locale
-
-@Composable
-fun TvBackdrop(channel: Channel?) {
-    val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
-    Box(Modifier.fillMaxSize()) {
-        AsyncImage(
-            model = channel?.cover,
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxSize()
-        )
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.78f))
-        )
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.horizontalGradient(
-                        *tvLeadingGradientColorStops(
-                            isRtl = isRtl,
-                            leading = TvColors.Background,
-                            middle = TvColors.Background.copy(alpha = 0.92f),
-                            trailing = TvColors.Background.copy(alpha = 0.72f),
-                            middlePosition = 0.58f,
-                        ).toTypedArray()
-                    )
-                )
-        )
-    }
-}
 
 @Composable
 fun TvNavigationRail(
@@ -203,12 +166,8 @@ fun FocusFrame(
     Box(
         modifier = modifier
             .zIndex(if (focused) 1f else 0f)
+            // no focus shadow: weak TV GPUs redraw it on every frame of the scale animation
             .scale(scale)
-            .shadow(
-                elevation = if (focused && enabled) 18.dp else 0.dp,
-                shape = shape,
-                clip = false
-            )
             .clip(shape)
             .background(
                 when {

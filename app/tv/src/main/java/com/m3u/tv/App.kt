@@ -183,7 +183,6 @@ fun App(
             .background(TvColors.Background)
             .windowInsetsPadding(WindowInsets.safeDrawing)
     ) {
-        TvBackdrop(channel = currentChannel ?: state.heroChannel)
         Row(Modifier.fillMaxSize()) {
             TvNavigationRail(
                 selected = if (destination == TvDestination.Diagnostics) TvDestination.Live else destination,

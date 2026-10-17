@@ -13,6 +13,7 @@ import com.m3u.data.repository.playlist.PlaylistRepository
 import com.m3u.data.repository.playlist.PlaylistRepositoryImpl
 import com.m3u.data.repository.programme.ProgrammeRepository
 import com.m3u.data.repository.programme.ProgrammeRepositoryImpl
+import com.m3u.data.repository.tv.TvRemoteControlConfig
 import com.m3u.data.repository.tv.TvRepository
 import com.m3u.data.repository.tv.TvRepositoryImpl
 import dagger.Binds
@@ -64,4 +65,8 @@ internal interface RepositoryModule {
     // provided by apps that ship a channel registry (the TV fork)
     @BindsOptionalOf
     fun optionalLinkRegistryConfig(): LinkRegistryConfig
+
+    // provided by apps that turn off the phone-remote server on TV (the TV fork)
+    @BindsOptionalOf
+    fun optionalTvRemoteControlConfig(): TvRemoteControlConfig
 }

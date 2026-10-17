@@ -28,6 +28,7 @@ import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import timber.log.Timber
+import java.util.Optional
 import javax.inject.Inject
 import kotlin.time.Duration
 
@@ -35,7 +36,8 @@ class TvRepositoryImpl @Inject constructor(
     private val nsdDeviceManager: NsdDeviceManager,
     private val httpServer: HttpServer,
     private val tvApi: TvApiDelegate,
-    @param:ApplicationContext private val context: Context
+    @param:ApplicationContext private val context: Context,
+    private val remoteControlConfig: Optional<TvRemoteControlConfig>,
 ) : TvRepository() {
     private val coroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val isTelevision: Boolean
@@ -55,7 +57,8 @@ class TvRepositoryImpl @Inject constructor(
     private val timber = Timber.tag("TvRepository")
 
     init {
-        if (isTelevision) broadcastOnTv()
+        val broadcast = remoteControlConfig.map(TvRemoteControlConfig::broadcastOnTv).orElse(true)
+        if (isTelevision && broadcast) broadcastOnTv()
     }
 
     override fun broadcastOnTv() {

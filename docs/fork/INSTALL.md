@@ -48,6 +48,16 @@ adb install -r app/tv/build/outputs/apk/release/tv-release.apk
   seeded from the bundled snapshot, so it appears even before the registry repository exists.
 - On an unmetered network, a link update starts on its own. It tests every link on the box and
   takes about 10–30 s. You can watch it in **Diagnostics**.
+- **Make it fast now.** Android 9 precompiles a sideloaded app only during its idle maintenance,
+  which on a TV may not happen for a day. After the first launch, run this once (and again after
+  each update of the APK):
+
+  ```bash
+  adb shell cmd package compile -m speed-profile -f com.salkeskin.trtv
+  ```
+
+  On a Mi TV Stick this took the cold start from about 2 s to 1.1 s and made list scrolling far
+  smoother.
 
 ## 5. Remote cheat sheet
 

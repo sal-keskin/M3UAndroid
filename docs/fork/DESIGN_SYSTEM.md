@@ -18,7 +18,8 @@ the couch, and one broadcast accent, crimson, reserved for live state and channe
 1. **The picture is the hero.** Overlays are transient and edge-anchored, and they never take focus
    from the video unless you asked for a list or an error needs a decision.
 2. **Focus is a state pair.** The focused container turns near-white (`Focus`) and its content turns
-   ink (`OnFocus`). It also scales up slightly. Focus never relies on colour alone.
+   ink (`OnFocus`). It also scales up slightly. It casts no shadow: 1 GB Android 9 sticks redraw
+   a shadow on every frame of the scale animation. Focus never relies on colour alone.
 3. **Crimson means live.** `Live` appears only on live badges, the channel number in focus or on
    air, the playhead and progress. Never use it for decoration.
 4. **One leading edge.** Headers, rows and panels share the 48 dp overscan-safe margin.
@@ -32,7 +33,7 @@ the couch, and one broadcast accent, crimson, reserved for live state and channe
 
 | Token | Value | Use |
 |---|---|---|
-| `Background` | `#07090D` | App canvas, under the backdrop |
+| `Background` | `#07090D` | App canvas: a flat fill, with no picture behind it |
 | `BackgroundSoft` | `#0D1118` | Secondary canvas |
 | `Surface` | `#141A24` | Panels, rows at rest, cards |
 | `SurfaceRaised` | `#1D2533` | Number badges at rest, toasts, stream blocks |

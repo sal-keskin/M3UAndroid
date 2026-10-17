@@ -1,0 +1,8 @@
+# TR TV fork code, which the generated profile (recorded before the fork) does not cover.
+# Precompiling it keeps the Live TV list and player responsive on 1.2 GHz Android 9 sticks.
+HSPLcom/m3u/tv/live/**;->**(**)**
+HSPLcom/m3u/tv/TvComponentsKt;->**(**)**
+HSPLcom/m3u/tv/AppKt;->**(**)**
+HSPLcom/m3u/data/registry/**;->**(**)**
+HSPLcom/m3u/data/repository/linkupdate/**;->**(**)**
+HSPLcom/m3u/data/service/internal/**;->**(**)**

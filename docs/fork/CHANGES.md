@@ -110,7 +110,8 @@ These are the rules shared with the registry builder. There are no Android APIs.
   - the live player layer for registry channels;
   - toasts;
   - start on last channel;
-  - the remote-pairing pin is now a small pill under the rail, hidden during playback.
+  - the remote-pairing pin moved under the rail and is hidden during playback. TR TV no longer
+    shows it, because its phone-remote server is off (see Performance).
 - `TvHomeViewModel`: refreshing the registry playlist from Library runs a link update.
 - `proguard-rules.pro`: keeps `io.netty.**`, `io.ktor.**` and `kotlin.reflect.jvm.internal.**`, as
   `:app:smartphone` already does. This fixes an upstream bug: release builds crashed on launch on a
@@ -140,6 +141,37 @@ These are the rules shared with the registry builder. There are no Android APIs.
 - `baselineprofile/tv`: target app id `com.salkeskin.trtv`.
 - `gradle/libs.versions.toml`: an explicit `squareup-okhttp` entry, the same version OkHttp already
   had transitively. No new third-party dependency.
+
+## Performance on low-end sticks
+
+Measured on a Xiaomi Mi TV Stick (Android 9, 1.2 GHz Cortex-A53, Mali-450, 1 GB RAM) with the
+release APK. The scroll test is 40 ▲ ▼ steps through the Live TV list (`dumpsys gfxinfo`).
+
+| | Before | After |
+|---|---|---|
+| Cold start (`am start -W`) | 1.7–3.5 s | 1.1–1.2 s |
+| Frame time: median / 90th / 99th percentile | 26 / 69 / 125 ms | 19 / 36 / 48 ms |
+| Frames that missed the deadline | 88 % | 60 %, most of them only just |
+| Memory (PSS) on Live TV | 61 MB | 57 MB |
+| Threads | 37 | 31 |
+
+What changed:
+
+- **No backdrop.** `TvBackdrop` drew the channel's logo full screen, cropped, under two
+  full-screen translucent layers, behind every screen. It is removed; the canvas is a flat
+  `Background`.
+- **No focus shadow.** `FocusFrame` cast an 18 dp shadow, which the GPU redrew on every frame of the
+  focus scale animation. Focus keeps its white fill, border and scale.
+- **No phone-remote server.** TV builds started a Ktor/Netty HTTP server and an NSD broadcast on
+  every launch, for pairing the upstream phone app as a remote; that is the pairing pin. A new
+  optional `TvRemoteControlConfig` turns it off. TR TV binds it with `broadcastOnTv = false`; apps
+  that don't bind it keep the upstream behaviour.
+- **Precompile the fork's code.** The generated baseline profile was recorded before the fork and
+  had no rule for its code. `app/tv/src/main/baselineProfiles/trtv-fork.txt` adds the Live TV
+  screens, the player, the link updater and the registry rules. Android 9 compiles a sideloaded app
+  with its profile only during idle maintenance, so [INSTALL.md](INSTALL.md) gives the one-time
+  `cmd package compile` command. Compiling everything (`-m speed`) was no smoother, and it cost
+  0.5 s of start time and 15 MB of memory.
 
 ## Phase 2: links from official live pages
 
