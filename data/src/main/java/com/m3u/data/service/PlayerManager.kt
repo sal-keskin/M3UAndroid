@@ -52,6 +52,50 @@ interface PlayerManager {
     suspend fun getCwPosition(channelUrl: String): Long
     suspend fun reloadThumbnail(channelUrl: String): Uri?
     suspend fun syncThumbnail(channelUrl: String): Uri?
+
+    /**
+     * Fallback urls of the playing channel. Only channels of a channel-registry playlist have
+     * several; null for every other channel.
+     */
+    val sourceState: StateFlow<PlaybackSourceState?>
+
+    /**
+     * One-shot notices about automatic source handling, for transient UI such as a toast.
+     */
+    val sourceEvents: SharedFlow<PlaybackSourceEvent>
+
+    /**
+     * Moves the position by [deltaMs] inside the seekable (timeshift) window.
+     */
+    fun seekBy(deltaMs: Long)
+
+    /**
+     * Jumps back to the live edge of a live stream.
+     */
+    fun seekToLive()
+}
+
+@Immutable
+data class PlaybackSourceState(
+    // index of the url being played, 0 is the primary
+    val index: Int,
+    val count: Int,
+    val sourceId: String?,
+    val height: Int?,
+    // every url failed
+    val exhausted: Boolean,
+)
+
+@Immutable
+sealed interface PlaybackSourceEvent {
+    // the current url failed and the next fallback is being tried
+    data class Switching(val index: Int, val count: Int) : PlaybackSourceEvent
+
+    // a paused or rewound position fell out of the timeshift window
+    data object BackToLive : PlaybackSourceEvent
+
+    // no url of the channel plays
+    data object Exhausted : PlaybackSourceEvent
 }
 
 @Immutable

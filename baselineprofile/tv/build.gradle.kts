@@ -46,7 +46,7 @@ androidComponents {
     onVariants { v ->
         v.instrumentationRunnerArguments.put(
             "targetAppId",
-            "com.m3u.tv"
+            "com.salkeskin.trtv"
         )
     }
 }

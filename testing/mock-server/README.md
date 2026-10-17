@@ -76,3 +76,10 @@ physical device:
 
 The default Xtream and Emby-compatible credentials are `m3u` / `m3u`.
 The reference provider uses `m3u` / `reference-password` and returns `mock-reference-access-token`.
+
+## Link-check fixtures (TR TV fork)
+
+`LinkCheckRoutes.kt` serves deterministic HLS cases for the registry stream validator in
+`data/registry`. The routes are a good master playlist (360p, 1080p and 1440p), 403, an empty
+playlist, a slow answer (8 s), a Referer requirement, missing segments, a non-HLS page and an
+ETag document. JVM tests start the server in-process with `startEmbeddedMockServer()`.

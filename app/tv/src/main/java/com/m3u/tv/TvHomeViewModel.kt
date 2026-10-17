@@ -20,6 +20,8 @@ import com.m3u.data.repository.extension.ExtensionSettingEditToken
 import com.m3u.data.repository.extension.ExtensionSettingUpdateResult
 import com.m3u.data.repository.extension.ExtensionSettingsConfiguration
 import com.m3u.data.repository.extension.ExtensionSettingsRepository
+import com.m3u.data.repository.linkupdate.LinkUpdateRepository
+import com.m3u.data.repository.linkupdate.isRegistry
 import com.m3u.data.repository.playlist.PlaylistRepository
 import com.m3u.data.repository.plugin.ExtensionPluginRepository
 import com.m3u.data.repository.plugin.InstalledPlugin
@@ -94,6 +96,7 @@ class TvHomeViewModel @Inject constructor(
     private val extensionPluginRepository: ExtensionPluginRepository,
     private val extensionSettingsRepository: ExtensionSettingsRepository,
     private val subscriptionProviderRepository: SubscriptionProviderRepository,
+    private val linkUpdateRepository: LinkUpdateRepository,
     private val settings: Settings,
     tvRepository: TvRepository,
     dPadReactionService: DPadReactionService
@@ -184,6 +187,11 @@ class TvHomeViewModel @Inject constructor(
 
     fun refreshSelectedPlaylist() {
         val playlist = state.value.selectedPlaylist ?: return
+        if (playlist.isRegistry) {
+            // registry channels are updated in place by the link updater, never re-imported
+            linkUpdateRepository.updateNow()
+            return
+        }
         viewModelScope.launch {
             playlistRepository.refresh(playlist.url)
             loadChannels(playlist.url)

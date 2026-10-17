@@ -366,6 +366,61 @@ internal object DatabaseMigrations {
         }
     }
 
+    /**
+     * Adds per-channel playback headers and the link-registry tables. Purely additive: existing
+     * channels keep every column and get `http_headers = NULL`, which plays exactly as before.
+     */
+    val MIGRATION_26_27 = object : Migration(26, 27) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE `streams` ADD COLUMN `http_headers` TEXT DEFAULT NULL")
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `registry_channels` (
+                    `canonical_id` TEXT NOT NULL,
+                    `playlist_url` TEXT NOT NULL,
+                    `rank` INTEGER NOT NULL,
+                    `official_live_page` TEXT DEFAULT NULL,
+                    `stale` INTEGER NOT NULL DEFAULT 0,
+                    `updated_at` INTEGER NOT NULL DEFAULT 0,
+                    PRIMARY KEY(`canonical_id`),
+                    FOREIGN KEY(`playlist_url`) REFERENCES `playlists`(`url`)
+                        ON UPDATE NO ACTION ON DELETE CASCADE
+                )
+                """.trimIndent()
+            )
+            db.execSQL(
+                """
+                CREATE INDEX IF NOT EXISTS `index_registry_channels_playlist_url`
+                ON `registry_channels` (`playlist_url`)
+                """.trimIndent()
+            )
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `channel_streams` (
+                    `canonical_id` TEXT NOT NULL,
+                    `url` TEXT NOT NULL,
+                    `position` INTEGER NOT NULL,
+                    `headers` TEXT DEFAULT NULL,
+                    `source_id` TEXT NOT NULL,
+                    `match_tier` INTEGER NOT NULL,
+                    `match_score` REAL NOT NULL,
+                    `status` TEXT NOT NULL,
+                    `latency_ms` INTEGER DEFAULT NULL,
+                    `height` INTEGER DEFAULT NULL,
+                    `failure_reason` TEXT DEFAULT NULL,
+                    `checked_at` INTEGER NOT NULL DEFAULT 0,
+                    `last_ok_at` INTEGER NOT NULL DEFAULT 0,
+                    `failure_count` INTEGER NOT NULL DEFAULT 0,
+                    `first_seen_at` INTEGER NOT NULL DEFAULT 0,
+                    PRIMARY KEY(`canonical_id`, `url`),
+                    FOREIGN KEY(`canonical_id`) REFERENCES `registry_channels`(`canonical_id`)
+                        ON UPDATE NO ACTION ON DELETE CASCADE
+                )
+                """.trimIndent()
+            )
+        }
+    }
+
     val MIGRATION_25_26 = object : Migration(25, 26) {
         override fun migrate(db: SupportSQLiteDatabase) {
             db.execSQL(

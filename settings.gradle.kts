@@ -30,6 +30,7 @@ include(
     ":extension:sdk-android",
 )
 include(":data")
+include(":data:registry")
 include(
     ":business:foryou",
     ":business:favorite",

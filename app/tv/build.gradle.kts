@@ -8,16 +8,25 @@ plugins {
 }
 
 val m3uMockServerUrl = providers.gradleProperty("m3uMockServerUrl").orElse("http://10.0.2.2:8080")
+// TR TV fork: channel registry repository (channels.json, sources.json, playlist.m3u)
+val trtvRegistryBaseUrl = providers.gradleProperty("trtvRegistryBaseUrl")
+    .orElse("https://raw.githubusercontent.com/sal-keskin/iptv/main")
 
 android {
     namespace = "com.m3u.tv"
     compileSdk = 37
     defaultConfig {
-        applicationId = "com.m3u.tv"
+        // TR TV fork: own id so it installs next to upstream M3U
+        applicationId = "com.salkeskin.trtv"
         minSdk = 26
         targetSdk = 33
         versionCode = 2
-        versionName = "1.0.1"
+        versionName = "1.0.1-trtv.1"
+        buildConfigField("String", "REGISTRY_BASE_URL", "\"${trtvRegistryBaseUrl.get()}\"")
+        ndk {
+            // Mi Box S and most Android TV boxes run a 32-bit ARM userland; arm64 for newer boxes
+            abiFilters += listOf("armeabi-v7a", "arm64-v8a")
+        }
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         testInstrumentationRunnerArguments["m3uMockServerUrl"] = m3uMockServerUrl.get()

@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Live TV (channel registry) screens of the TV app -->
+    <string name="tv_live_title">Live TV</string>
+    <plurals name="tv_live_channel_count">
+        <item quantity="one">%d channel</item>
+        <item quantity="other">%d channels</item>
+    </plurals>
+    <string name="tv_live_updated">Links updated %1$s</string>
+    <string name="tv_live_never_updated">Links not checked yet</string>
+    <string name="tv_live_empty_title">No channels yet</string>
+    <string name="tv_live_empty_body">Update links to download the channel list.</string>
+    <string name="tv_live_press_ok">Press OK to watch. Hold OK to add to favorites.</string>
+    <string name="tv_live_now_playing">Now playing</string>
+    <string name="tv_live_badge">LIVE</string>
+    <string name="tv_live_behind">%1$s behind live</string>
+    <string name="tv_channel_list_title">Channels</string>
+
+    <string name="tv_action_update_links">Update links</string>
+    <string name="tv_action_open_diagnostics">Diagnostics</string>
+    <string name="tv_action_revalidate">Re-validate</string>
+    <string name="tv_action_repair_channel">Repair this channel</string>
+    <string name="tv_action_next_channel">Next channel</string>
+    <string name="tv_action_go_live">Back to live</string>
+
+    <string name="tv_link_progress_fetching">Fetching sources… %1$d/%2$d</string>
+    <string name="tv_link_progress_matching">Matching channels…</string>
+    <string name="tv_link_progress_validating">Testing links… %1$d/%2$d</string>
+    <string name="tv_link_progress_saving">Saving…</string>
+    <string name="tv_link_summary">Links: %1$d updated, %2$d unchanged, %3$d still failing. New fuzzy matches to review: %4$d</string>
+    <string name="tv_link_update_failed">Links could not be updated. Check the network and try again.</string>
+    <string name="tv_link_switching_source">Switching source… (%1$d/%2$d)</string>
+    <string name="tv_link_back_to_live">Back to live</string>
+    <string name="tv_link_repairing">Repairing %1$s…</string>
+    <string name="tv_link_repaired">%1$s repaired</string>
+    <string name="tv_link_repair_failed">No working link found for %1$s</string>
+
+    <string name="tv_player_error_title">%1$s can\'t be played</string>
+    <string name="tv_player_error_body">Every known link failed. Repair tests fresh links for this channel only.</string>
+    <string name="tv_player_error_no_link">There is no link for this channel yet.</string>
+    <string name="tv_player_paused">Paused</string>
+    <string name="tv_player_hint_live">OK: channel list · ◀ ▶: rewind · ▲ ▼: change channel</string>
+    <string name="tv_player_hint_timeshift">OK: pause or play · ◀ ▶: 10 seconds · Back: hide</string>
+    <string name="tv_number_not_found">No channel %1$d</string>
+
+    <string name="tv_status_ok">Working</string>
+    <string name="tv_status_stale">Last known link</string>
+    <string name="tv_status_untested">Not tested yet</string>
+    <string name="tv_status_failing">Not working</string>
+    <string name="tv_status_no_link">No link yet</string>
+
+    <string name="tv_tier_pinned">Pinned</string>
+    <string name="tv_tier_exact">Exact ID</string>
+    <string name="tv_tier_alias">Alias</string>
+    <string name="tv_tier_fuzzy">Fuzzy</string>
+
+    <string name="tv_diagnostics_title">Diagnostics</string>
+    <string name="tv_diagnostics_subtitle">Every channel\'s primary and fallback links, where they came from and why they failed.</string>
+    <string name="tv_diag_primary">Primary</string>
+    <string name="tv_diag_fallback">Fallback %1$d</string>
+    <string name="tv_diag_checked">Checked %1$s</string>
+    <string name="tv_diag_never_checked">Never checked</string>
+    <string name="tv_diag_latency" translatable="false">%1$d ms</string>
+    <string name="tv_diag_height" translatable="false">%1$dp</string>
+    <string name="tv_diag_reason">Reason: %1$s</string>
+    <string name="tv_diag_headers">Custom headers</string>
+    <string name="tv_diag_source">Source: %1$s</string>
+    <string name="tv_diag_official_page">Official page: %1$s</string>
+    <string name="tv_diag_empty">No links recorded for this channel. Run Update links.</string>
+    <string name="tv_diag_source_errors">Unreachable sources: %1$s</string>
+
+    <string name="tv_settings_start_last">Start on last channel</string>
+    <string name="tv_settings_auto_update">Update links automatically</string>
+    <string name="tv_settings_registry_url">Registry URL</string>
+    <string name="tv_settings_registry_url_hint">Folder that holds channels.json, sources.json and playlist.m3u</string>
+    <string name="tv_settings_save">Save</string>
+    <string name="tv_settings_reset">Reset</string>
+    <string name="tv_settings_on">On</string>
+    <string name="tv_settings_off">Off</string>
+
+    <!-- official live pages (opt-in) and the YouTube hand-off -->
+    <string name="tv_settings_official_links">Links from official websites</string>
+    <string name="tv_settings_official_links_state">%1$s · Personal viewing only</string>
+    <string name="tv_status_external">Opens in YouTube</string>
+    <string name="tv_handoff_title">%1$s streams on YouTube</string>
+    <string name="tv_handoff_body">This channel\'s official live stream is on YouTube. It opens in the YouTube app.</string>
+    <string name="tv_action_open_youtube">Open in YouTube</string>
+    <string name="tv_youtube_missing">The YouTube app is not installed on this TV</string>
+</resources>

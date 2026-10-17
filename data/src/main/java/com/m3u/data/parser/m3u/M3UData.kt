@@ -2,6 +2,7 @@ package com.m3u.data.parser.m3u
 
 import androidx.core.net.toUri
 import com.m3u.data.database.model.Channel
+import com.m3u.data.registry.source.PlaybackHeaders
 import dev.oxyroid.parser.protocol.ParsedChannel
 
 internal typealias M3UData = ParsedChannel
@@ -11,10 +12,12 @@ internal fun M3UData.toChannel(
     seen: Long = 0L
 ): Channel {
     val fileScheme = "file:///"
-    val absoluteUrl = if (!url.startsWith(fileScheme)) url
+    // kodi adaptive: 'url|Referer=..&User-Agent=..' carries request headers after the pipe.
+    val (playableUrl, kodiHeaders) = PlaybackHeaders.splitKodiUrl(url)
+    val absoluteUrl = if (!playableUrl.startsWith(fileScheme)) playableUrl
     else {
         with(playlistUrl.toUri()) {
-            val paths = pathSegments.dropLast(1) + url.drop(fileScheme.length)
+            val paths = pathSegments.dropLast(1) + playableUrl.drop(fileScheme.length)
             buildUpon()
                 .path(
                     paths.joinToString("/", "", "")
@@ -41,6 +44,10 @@ internal fun M3UData.toChannel(
         seen = seen,
         licenseType = licenseType,
         licenseKey = licenseKey,
-        relationId = relationId
+        relationId = relationId,
+        // '#EXTVLCOPT' options first; the kodi url suffix wins when both name a header.
+        headers = PlaybackHeaders
+            .merge(PlaybackHeaders.fromOptions(options), kodiHeaders)
+            .takeIf { it.isNotEmpty() }
     )
 }

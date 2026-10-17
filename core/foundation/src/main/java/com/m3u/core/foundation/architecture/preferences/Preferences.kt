@@ -186,6 +186,10 @@ private val PREFERENCES: Map<Preferences.Key<*>, Any> = buildMap {
     put(PreferencesKeys.PLAYER_PANEL, true)
     put(PreferencesKeys.COMPACT_DIMENSION, false)
     put(PreferencesKeys.EXTERNAL_EXTENSIONS, false)
+    put(PreferencesKeys.REGISTRY_BASE_URL, "")
+    put(PreferencesKeys.LINK_AUTO_UPDATE, true)
+    put(PreferencesKeys.START_ON_LAST_CHANNEL, false)
+    put(PreferencesKeys.OFFICIAL_PAGE_LINKS, false)
 }
 
 suspend fun Settings.applyDefaultValues() {
@@ -244,4 +248,11 @@ object PreferencesKeys {
 
     val COMPACT_DIMENSION = booleanPreferencesKey("compact-dimension")
     val EXTERNAL_EXTENSIONS = booleanPreferencesKey("external-extensions")
+
+    // channel registry (TR TV fork); an empty base url means the app's built-in default
+    val REGISTRY_BASE_URL = stringPreferencesKey("registry-base-url")
+    val LINK_AUTO_UPDATE = booleanPreferencesKey("link-auto-update")
+    val START_ON_LAST_CHANNEL = booleanPreferencesKey("start-on-last-channel")
+    // opt-in: read channels' own official live pages on this device (personal viewing only)
+    val OFFICIAL_PAGE_LINKS = booleanPreferencesKey("official-page-links")
 }

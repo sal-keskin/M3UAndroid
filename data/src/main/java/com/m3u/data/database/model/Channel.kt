@@ -63,7 +63,13 @@ data class Channel(
      * if it is xtream vod, it may be streamId.
      * if it is xtream series, it may be seriesId.
      */
-    val relationId: String? = null
+    val relationId: String? = null,
+    /**
+     * Playback request headers (Referer, User-Agent, Origin) carried by the playlist entry,
+     * from `#EXTVLCOPT` options or a Kodi `url|Header=value` suffix.
+     */
+    @ColumnInfo(name = "http_headers", defaultValue = "NULL")
+    val headers: Map<String, String>? = null
 ) {
     companion object {
         const val URL_DYNAMIC = "dynamic"

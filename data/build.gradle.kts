@@ -108,6 +108,7 @@ dependencies {
     implementation(project(":core:foundation"))
     implementation(project(":extension:runtime"))
     implementation(project(":extension:transport-android"))
+    api(project(":data:registry"))
     implementation("dev.oxyroid.parser:m3u")
     api("dev.oxyroid.parser:xtream")
     implementation(project(":lint:annotation"))
@@ -168,6 +169,8 @@ dependencies {
     debugImplementation(libs.logback.android)
 
     implementation(libs.jakewharton.disklrucache)
+
+    testImplementation(kotlin("test-junit"))
 
     androidTestImplementation(libs.androidx.room.testing)
     androidTestImplementation(libs.androidx.test.ext.junit)

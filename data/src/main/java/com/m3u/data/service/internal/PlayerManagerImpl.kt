@@ -16,6 +16,7 @@ import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
 import androidx.media3.common.VideoSize
 import androidx.media3.datasource.DataSource
+import androidx.media3.datasource.HttpDataSource
 import androidx.media3.datasource.cache.Cache
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.datasource.rtmp.RtmpDataSource
@@ -60,7 +61,12 @@ import com.m3u.data.database.model.Channel
 import com.m3u.data.database.model.Playlist
 import com.m3u.data.database.model.copyXtreamEpisode
 import com.m3u.data.database.model.copyXtreamSeries
+import com.m3u.data.registry.resolve.OfficialPageScanner
+import com.m3u.data.registry.source.PlaybackHeaders
 import com.m3u.data.repository.channel.ChannelRepository
+import com.m3u.data.repository.linkupdate.LinkUpdateRepository
+import com.m3u.data.repository.linkupdate.PlaybackStream
+import com.m3u.data.repository.linkupdate.isRegistryPlaylistUrl
 import com.m3u.data.repository.playlist.PlaylistRepository
 import com.m3u.data.repository.providerAccountIdOrNull
 import com.m3u.data.repository.provider.ProviderOperationException
@@ -68,12 +74,15 @@ import com.m3u.data.repository.provider.ProviderPlaybackCloseReason
 import com.m3u.data.repository.provider.ProviderPlaybackSession
 import com.m3u.data.repository.provider.SubscriptionProviderRepository
 import com.m3u.data.service.MediaCommand
+import com.m3u.data.service.PlaybackSourceEvent
+import com.m3u.data.service.PlaybackSourceState
 import com.m3u.data.service.PlayerManager
 import dagger.hilt.android.qualifiers.ApplicationContext
 import io.ktor.http.Url
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
@@ -110,6 +119,7 @@ class PlayerManagerImpl @Inject constructor(
     private val playlistRepository: PlaylistRepository,
     private val channelRepository: ChannelRepository,
     private val subscriptionProviderRepository: SubscriptionProviderRepository,
+    private val linkUpdateRepository: LinkUpdateRepository,
     private val cache: Cache,
     private val settings: Settings,
     publisher: Publisher,
@@ -136,8 +146,20 @@ class PlayerManagerImpl @Inject constructor(
     private var activePlayerListener: Player.Listener? = null
     private var activePlayerGeneration: Long? = null
     private var activeRequestHeaders: Map<String, String> = emptyMap()
+    private var activeChannelUserAgent: String? = null
     private var activeProviderPlayback = false
     private var activeProviderPlaybackAllowsCrossOrigin = false
+
+    // channel-registry playback: ordered fallback urls of the playing channel
+    private var activeStreams: List<PlaybackStream> = emptyList()
+    private var activeStreamIndex = 0
+    private var activeChannel: Channel? = null
+    private var stallJob: Job? = null
+    private var lastBackToLiveAt = 0L
+    private val registryPlayback: Boolean get() = activeStreams.isNotEmpty()
+
+    override val sourceState = MutableStateFlow<PlaybackSourceState?>(null)
+    override val sourceEvents = MutableSharedFlow<PlaybackSourceEvent>(extraBufferCapacity = 8)
 
     override val playlist: StateFlow<Playlist?> = mediaCommand.flatMapLatest { command ->
         when (command) {
@@ -271,7 +293,39 @@ class PlayerManagerImpl @Inject constructor(
                 )
                 return
             }
+            val registryStreams = if (providerSource == null) {
+                // tokenized official-page links expire: resolve again first when stale (opt-in)
+                runCatching { linkUpdateRepository.refreshOfficialLink(channel) }
+                    .onFailure { timber.w(it, "cannot refresh the official link") }
+                linkUpdateRepository.streamsFor(channel)
+                    // a YouTube live opens in the YouTube app, never in this player
+                    .filterNot { OfficialPageScanner.isYoutubeUrl(it.url) }
+            } else {
+                emptyList()
+            }
+            if (!providerSessionState.isCurrent(generation)) return
+            if (providerSource == null && isRegistryPlaylistUrl(channel.playlistUrl) && registryStreams.isEmpty()) {
+                // a registry channel without any link yet: report it like an exhausted fallback list
+                providerSessionState.runIfCurrent(generation) {
+                    activeChannel = channel
+                    sourceState.value = PlaybackSourceState(
+                        index = 0,
+                        count = 0,
+                        sourceId = null,
+                        height = null,
+                        exhausted = true,
+                    )
+                    playbackException.value = PlaybackException(
+                        "No stream link",
+                        null,
+                        PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND,
+                    )
+                }
+                sourceEvents.tryEmit(PlaybackSourceEvent.Exhausted)
+                return
+            }
             val channelUrl = providerSource?.url
+                ?: registryStreams.firstOrNull()?.url
                 ?: channel.url.takeUnless { url -> url == Channel.URL_DYNAMIC }
                 ?: throw ProviderOperationException("Dynamic playback reference was not found")
             val attachment = providerSessionState.attach(
@@ -284,7 +338,23 @@ class PlayerManagerImpl @Inject constructor(
             )
             if (!attachment.accepted) return
             val sourceAccepted = providerSessionState.runIfCurrent(generation) {
-                activeRequestHeaders = providerSource?.headers.orEmpty()
+                val channelHeaders = registryStreams.firstOrNull()?.headers ?: channel.headers.orEmpty()
+                activeRequestHeaders = providerSource?.headers
+                    ?: channelHeaders.withoutUserAgent()
+                activeChannelUserAgent = channelHeaders[PlaybackHeaders.USER_AGENT]
+                    .takeIf { providerSource == null }
+                activeStreams = registryStreams
+                activeStreamIndex = 0
+                activeChannel = channel
+                sourceState.value = registryStreams.firstOrNull()?.let { stream ->
+                    PlaybackSourceState(
+                        index = 0,
+                        count = registryStreams.size,
+                        sourceId = stream.sourceId,
+                        height = stream.height,
+                        exhausted = false,
+                    )
+                }
                 activeProviderPlayback = providerSource != null
                 activeProviderPlaybackAllowsCrossOrigin =
                     providerSource?.allowCrossOriginRequests == true
@@ -306,6 +376,7 @@ class PlayerManagerImpl @Inject constructor(
                 val chainAccepted = providerSessionState.runIfCurrent(generation) {
                     this.chain = channelPreference?.mineType
                         ?.let { MimetypeChain.Remembered(channelUrl, it) }
+                        ?: registryMimetypeHint(channelUrl)
                         ?: MimetypeChain.Unspecified(channelUrl)
                 }
                 if (!chainAccepted) return
@@ -393,10 +464,19 @@ class PlayerManagerImpl @Inject constructor(
             FLAG_ALLOW_NON_IDR_KEYFRAMES and FLAG_DETECT_ACCESS_UNITS
         )
         val mediaExtractor = MediaExtractorCompat(extractorsFactory, dataSourceFactory)
+        val timeshift = registryPlayback && !rtmp
+        // streams read off an official page may not be stored ("no archiving"): no disk cache
+        val cacheSegments = timeshift &&
+            activeStreams.getOrNull(activeStreamIndex)?.sourceId != OfficialPageScanner.SOURCE_OFFICIAL
         val mediaSourceFactory = when (mimeType) {
-            MimeTypes.APPLICATION_M3U8 -> HlsMediaSource.Factory(dataSourceFactory)
+            MimeTypes.APPLICATION_M3U8 -> HlsMediaSource.Factory(
+                if (cacheSegments) TimeshiftDataSourceFactory(dataSourceFactory, cache) else dataSourceFactory
+            )
                 .setAllowChunklessPreparation(false)
                 .setExtractorFactory(DefaultHlsExtractorFactory())
+                .apply {
+                    if (timeshift) setPlaylistParserFactory(TimeshiftHlsPlaylistParserFactory())
+                }
 
             MimeTypes.APPLICATION_SS -> ProgressiveMediaSource.Factory(
                 dataSourceFactory,
@@ -442,7 +522,20 @@ class PlayerManagerImpl @Inject constructor(
                 mediaSourceFactory.setDrmSessionManagerProvider { drmSessionManager }
             }
         }
-        val mediaItem = MediaItem.fromUri(url)
+        val mediaItem = if (registryPlayback) {
+            // keep the speed at 1x: the live-offset catch-up would drift a paused or rewound picture
+            MediaItem.Builder()
+                .setUri(url)
+                .setLiveConfiguration(
+                    MediaItem.LiveConfiguration.Builder()
+                        .setMinPlaybackSpeed(1f)
+                        .setMaxPlaybackSpeed(1f)
+                        .build()
+                )
+                .build()
+        } else {
+            MediaItem.fromUri(url)
+        }
         val mediaSource: MediaSource = mediaSourceFactory.createMediaSource(mediaItem)
         val preparedPlayer = preparePlayer(
             generation = generation,
@@ -515,6 +608,13 @@ class PlayerManagerImpl @Inject constructor(
         synchronized(playerLifecycleLock) {
             extractor = null
             activeRequestHeaders = emptyMap()
+            activeChannelUserAgent = null
+            activeStreams = emptyList()
+            activeStreamIndex = 0
+            activeChannel = null
+            stallJob?.cancel()
+            stallJob = null
+            sourceState.value = null
             activeProviderPlayback = false
             activeProviderPlaybackAllowsCrossOrigin = false
             mediaCommand.value = null
@@ -616,7 +716,7 @@ class PlayerManagerImpl @Inject constructor(
     ): ExoPlayer = ExoPlayer.Builder(context)
         .setMediaSourceFactory(mediaSourceFactory)
         .setRenderersFactory(renderersFactory)
-        .setTrackSelector(createTrackSelector(tunneling))
+        .setTrackSelector(createTrackSelector(tunneling, capTo1080p = registryPlayback))
         .setHandleAudioBecomingNoisy(true)
         .build()
         .apply {
@@ -690,12 +790,16 @@ class PlayerManagerImpl @Inject constructor(
         Codecs.createRenderersFactory(context)
     }
 
-    private fun createTrackSelector(tunneling: Boolean): TrackSelector {
+    private fun createTrackSelector(tunneling: Boolean, capTo1080p: Boolean): TrackSelector {
         return DefaultTrackSelector(context).apply {
             setParameters(
                 buildUponParameters()
                     .setForceHighestSupportedBitrate(true)
                     .setTunnelingEnabled(tunneling)
+                    .apply {
+                        // small TV boxes decode 1080p reliably; taller variants stutter
+                        if (capTo1080p) setMaxVideoSize(1920, 1080)
+                    }
             )
         }
     }
@@ -746,6 +850,7 @@ class PlayerManagerImpl @Inject constructor(
     ) {
         providerSessionState.runIfCurrent(generation) {
             playbackState.value = state
+            if (registryPlayback) watchForStall(generation, state)
             if (state == Player.STATE_ENDED) {
                 closeProviderSessionAsync(
                     session = providerSessionState.detach(generation),
@@ -764,6 +869,9 @@ class PlayerManagerImpl @Inject constructor(
         exception: PlaybackException?,
     ) {
         providerSessionState.runIfCurrent(generation) {
+            if (exception != null && registryPlayback && returnToLiveIfTimeshifted(generation, exception)) {
+                return@runIfCurrent
+            }
             when (val errorCode = exception?.errorCode) {
                 PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW -> {
                     timber.w("onPlayerErrorChanged, ERROR_CODE_BEHIND_LIVE_WINDOW, trying to replay")
@@ -771,6 +879,7 @@ class PlayerManagerImpl @Inject constructor(
                         it.seekToDefaultPosition()
                         it.prepare()
                     }
+                    if (registryPlayback) sourceEvents.tryEmit(PlaybackSourceEvent.BackToLive)
                 }
 
                 PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED,
@@ -799,6 +908,10 @@ class PlayerManagerImpl @Inject constructor(
                         val next = chain.next()
                         chain = next
                         when (next) {
+                            is MimetypeChain.Unsupported if registryPlayback -> {
+                                failover(generation, exception, "unsupported format")
+                            }
+
                             is MimetypeChain.Unsupported -> {
                                 playbackException.value = exception
                                 closeProviderSessionForGenerationAsync(
@@ -817,12 +930,21 @@ class PlayerManagerImpl @Inject constructor(
                     }
                 }
 
+                PlaybackException.ERROR_CODE_IO_UNSPECIFIED if registryPlayback -> {
+                    failover(generation, exception, exception.errorCodeName)
+                }
+
                 PlaybackException.ERROR_CODE_IO_UNSPECIFIED -> {
                     playbackException.value = exception
                     closeProviderSessionForGenerationAsync(
                         generation = generation,
                         reason = ProviderPlaybackCloseReason.PLAYBACK_FAILED,
                     )
+                }
+
+                else if exception != null && registryPlayback -> {
+                    timber.w(exception, "registry source failed: ${exception.errorCodeName}")
+                    failover(generation, exception, exception.reason())
                 }
 
                 else -> {
@@ -861,6 +983,138 @@ class PlayerManagerImpl @Inject constructor(
         synchronized(playerLifecycleLock) {
             player.value.takeIf { activePlayerGeneration == generation }
         }
+
+    override fun seekBy(deltaMs: Long) {
+        val currentPlayer = player.value ?: return
+        if (!currentPlayer.isCurrentMediaItemSeekable) return
+        val duration = currentPlayer.duration.takeIf { it != C.TIME_UNSET } ?: return
+        currentPlayer.seekTo((currentPlayer.currentPosition + deltaMs).coerceIn(0L, duration))
+    }
+
+    override fun seekToLive() {
+        val currentPlayer = player.value ?: return
+        currentPlayer.seekToDefaultPosition()
+        currentPlayer.playWhenReady = true
+    }
+
+    /**
+     * The current registry url failed: remember it, then try the next fallback silently.
+     * When none is left, surface the error so the UI can offer a repair.
+     */
+    private fun failover(generation: Long, exception: PlaybackException?, reason: String) {
+        stallJob?.cancel()
+        stallJob = null
+        val streams = activeStreams
+        val failedIndex = activeStreamIndex
+        val failed = streams.getOrNull(failedIndex)
+        val channel = activeChannel
+        if (failed != null && channel != null) {
+            ioCoroutineScope.launch {
+                runCatching { linkUpdateRepository.reportPlaybackFailure(channel, failed.url, reason) }
+                    .onFailure { timber.w(it, "cannot record playback failure") }
+            }
+        }
+        val nextIndex = failedIndex + 1
+        val next = streams.getOrNull(nextIndex)
+        if (next == null) {
+            timber.w("every registry url failed")
+            sourceState.value = sourceState.value?.copy(exhausted = true)
+            playbackException.value = exception ?: PlaybackException(
+                reason,
+                null,
+                PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT,
+            )
+            sourceEvents.tryEmit(PlaybackSourceEvent.Exhausted)
+            return
+        }
+        timber.d("switching to fallback ${nextIndex + 1}/${streams.size}")
+        activeStreamIndex = nextIndex
+        activeRequestHeaders = next.headers.withoutUserAgent()
+        activeChannelUserAgent = next.headers[PlaybackHeaders.USER_AGENT]
+        chain = registryMimetypeHint(next.url) ?: MimetypeChain.Unspecified(next.url)
+        playbackException.value = null
+        sourceState.value = PlaybackSourceState(
+            index = nextIndex,
+            count = streams.size,
+            sourceId = next.sourceId,
+            height = next.height,
+            exhausted = false,
+        )
+        sourceEvents.tryEmit(PlaybackSourceEvent.Switching(nextIndex, streams.size))
+        mainCoroutineScope.launch {
+            tryPlay(
+                generation = generation,
+                url = next.url,
+                applyContinueWatching = false,
+            )
+        }
+    }
+
+    /**
+     * A paused or rewound position whose segments the CDN already dropped is not a broken source:
+     * go back to live instead of failing over.
+     */
+    private fun returnToLiveIfTimeshifted(generation: Long, exception: PlaybackException): Boolean {
+        val currentPlayer = playerForGeneration(generation) ?: return false
+        val responseCode = (exception.cause as? HttpDataSource.InvalidResponseCodeException)?.responseCode
+        val segmentGone = exception.errorCode == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW ||
+            exception.errorCode == PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND ||
+            responseCode in TIMESHIFT_GONE_CODES
+        if (!segmentGone || !currentPlayer.isBehindLive()) return false
+        val now = System.currentTimeMillis()
+        if (now - lastBackToLiveAt < BACK_TO_LIVE_COOLDOWN_MS) return false
+        lastBackToLiveAt = now
+        timber.w("timeshift position expired, back to live")
+        currentPlayer.seekToDefaultPosition()
+        currentPlayer.prepare()
+        currentPlayer.playWhenReady = true
+        sourceEvents.tryEmit(PlaybackSourceEvent.BackToLive)
+        return true
+    }
+
+    private fun watchForStall(generation: Long, state: Int) {
+        stallJob?.cancel()
+        stallJob = null
+        val currentPlayer = playerForGeneration(generation) ?: return
+        if (state != Player.STATE_BUFFERING || !currentPlayer.playWhenReady) return
+        val index = activeStreamIndex
+        stallJob = mainCoroutineScope.launch {
+            delay(STALL_TIMEOUT_MS)
+            if (!providerSessionState.isCurrent(generation) || activeStreamIndex != index) return@launch
+            val stalled = playerForGeneration(generation) ?: return@launch
+            if (stalled.playbackState != Player.STATE_BUFFERING || !stalled.playWhenReady) return@launch
+            if (stalled.isBehindLive()) {
+                timber.w("stalled while timeshifted, back to live")
+                stalled.seekToDefaultPosition()
+                sourceEvents.tryEmit(PlaybackSourceEvent.BackToLive)
+            } else {
+                timber.w("stalled for ${STALL_TIMEOUT_MS}ms")
+                failover(generation, null, "stall")
+            }
+        }
+    }
+
+    private fun Player.isBehindLive(): Boolean =
+        isCurrentMediaItemLive && currentLiveOffset != C.TIME_UNSET &&
+            currentLiveOffset > TIMESHIFT_BEHIND_LIVE_MS
+
+    private fun registryMimetypeHint(url: String): MimetypeChain? {
+        if (!registryPlayback) return null
+        val path = url.substringBefore('?').substringBefore('#').lowercase()
+        return if (path.endsWith(".m3u8") || path.endsWith(".m3u")) {
+            MimetypeChain.Remembered(url, MimeTypes.APPLICATION_M3U8)
+        } else {
+            null
+        }
+    }
+
+    private fun Map<String, String>.withoutUserAgent(): Map<String, String> =
+        filterKeys { !it.equals(PlaybackHeaders.USER_AGENT, ignoreCase = true) }
+
+    private fun PlaybackException.reason(): String {
+        val code = (cause as? HttpDataSource.InvalidResponseCodeException)?.responseCode
+        return if (code != null) "HTTP $code" else errorCodeName
+    }
 
     override fun pauseOrContinue(value: Boolean) {
         player.value?.apply {
@@ -1154,12 +1408,15 @@ class PlayerManagerImpl @Inject constructor(
     }
 
     /**
-     * Read user-agent appended to the channelUrl.
-     * If there is no result from url, it will use playlist user-agent instead.
+     * Read the channel's own user-agent header ('#EXTVLCOPT' or kodi url suffix), then the
+     * user-agent appended to the channelUrl by older imports.
+     * If there is no result, it will use playlist user-agent instead.
      */
     private fun getUserAgent(channelUrl: String, playlist: Playlist?): String? {
         val kodiUrlOptions = channelUrl.readKodiUrlOptions()
-        val userAgent = kodiUrlOptions[KodiAdaptions.HTTP_OPTION_UA] ?: playlist?.userAgent
+        val userAgent = activeChannelUserAgent
+            ?: kodiUrlOptions[KodiAdaptions.HTTP_OPTION_UA]
+            ?: playlist?.userAgent
         return userAgent
     }
 
@@ -1180,6 +1437,11 @@ class PlayerManagerImpl @Inject constructor(
 fun VideoSize.toRect(): Rect {
     return Rect(0, 0, width, height)
 }
+
+private const val STALL_TIMEOUT_MS = 10_000L
+private const val TIMESHIFT_BEHIND_LIVE_MS = 30_000L
+private const val BACK_TO_LIVE_COOLDOWN_MS = 30_000L
+private val TIMESHIFT_GONE_CODES = setOf(403, 404, 410)
 
 private data class PlaybackStateEvent(
     val generation: Long,

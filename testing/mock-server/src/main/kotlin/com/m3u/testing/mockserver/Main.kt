@@ -70,6 +70,8 @@ internal fun Application.mockServerModule() {
             call.respondText("ok", ContentType.Text.Plain)
         }
 
+        linkCheckRoutes()
+
         post("/reference-provider/login") {
             val body = runCatching {
                 Json.parseToJsonElement(call.receiveText()).jsonObject
@@ -504,7 +506,7 @@ private fun io.ktor.server.application.ApplicationCall.xtreamAuth(): XtreamAuth 
     return XtreamAuth(username == DEFAULT_USERNAME && password == DEFAULT_PASSWORD)
 }
 
-private fun io.ktor.server.application.ApplicationCall.baseUrl(): String {
+internal fun io.ktor.server.application.ApplicationCall.baseUrl(): String {
     val forwardedProto = request.headers["X-Forwarded-Proto"]
     val scheme = forwardedProto ?: request.local.scheme
     val host = request.host()

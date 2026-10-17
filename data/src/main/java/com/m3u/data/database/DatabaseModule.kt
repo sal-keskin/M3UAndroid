@@ -9,6 +9,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 import com.m3u.data.database.dao.ChannelDao
 import com.m3u.data.database.dao.ColorSchemeDao
 import com.m3u.data.database.dao.EpisodeDao
+import com.m3u.data.database.dao.LinkRegistryDao
 import com.m3u.data.database.dao.PlaylistDao
 import com.m3u.data.database.dao.ProgrammeDao
 import com.m3u.data.database.dao.ProviderDao
@@ -50,6 +51,7 @@ internal object DatabaseModule {
         .addMigrations(DatabaseMigrations.migration22To23(credentialVault))
         .addMigrations(DatabaseMigrations.MIGRATION_24_25)
         .addMigrations(DatabaseMigrations.MIGRATION_25_26)
+        .addMigrations(DatabaseMigrations.MIGRATION_26_27)
         .build()
 
     @Provides
@@ -87,4 +89,10 @@ internal object DatabaseModule {
     fun provideProviderDao(
         database: M3UDatabase
     ): ProviderDao = database.providerDao()
+
+    @Provides
+    @Singleton
+    fun provideLinkRegistryDao(
+        database: M3UDatabase
+    ): LinkRegistryDao = database.linkRegistryDao()
 }

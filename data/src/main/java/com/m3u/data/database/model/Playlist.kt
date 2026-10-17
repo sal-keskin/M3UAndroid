@@ -62,6 +62,10 @@ data class Playlist(
     companion object {
         const val URL_IMPORTED = "imported"
 
+        // channel-registry playlists (TR TV fork) are kept fresh by the link updater, which
+        // updates channels in place; the generic delete-and-reinsert refresh must never run on them.
+        const val URL_REGISTRY_SCHEME = "registry://"
+
         val SERIES_TYPES = arrayOf(
             DataSource.Xtream.TYPE_SERIES
         )
@@ -79,6 +83,7 @@ val Playlist.refreshable: Boolean
         DataSource.M3U -> url != Playlist.URL_IMPORTED && !url.startsWithAny(
             "file://",
             "content://",
+            Playlist.URL_REGISTRY_SCHEME,
             ignoreCase = true
         )
 

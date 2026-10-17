@@ -127,7 +127,7 @@ fun TvNavigationRail(
             .fillMaxSize()
             .background(Color.Black.copy(alpha = 0.28f))
     ) {
-        TvDestination.entries.forEach { destination ->
+        TvDestination.entries.filter { it.inRail }.forEach { destination ->
             RailItem(
                 destination = destination,
                 selected = destination == selected,
@@ -166,6 +166,8 @@ private fun RailItem(
 
 @Composable
 private fun TvDestination.label(): String = when (this) {
+    TvDestination.Live -> stringResource(string.tv_live_title)
+    TvDestination.Diagnostics -> stringResource(string.tv_diagnostics_title)
     TvDestination.Home -> stringResource(string.tv_home_title)
     TvDestination.Library -> stringResource(string.tv_library_title)
     TvDestination.Favorites -> stringResource(string.tv_favorites_title)

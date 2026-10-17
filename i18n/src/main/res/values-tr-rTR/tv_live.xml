@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="tv_live_title">Canlı TV</string>
+    <plurals name="tv_live_channel_count">
+        <item quantity="one">%d kanal</item>
+        <item quantity="other">%d kanal</item>
+    </plurals>
+    <string name="tv_live_updated">Linkler %1$s güncellendi</string>
+    <string name="tv_live_never_updated">Linkler henüz kontrol edilmedi</string>
+    <string name="tv_live_empty_title">Henüz kanal yok</string>
+    <string name="tv_live_empty_body">Kanal listesini indirmek için linkleri güncelleyin.</string>
+    <string name="tv_live_press_ok">İzlemek için OK\'e basın. Favorilere eklemek için OK\'e basılı tutun.</string>
+    <string name="tv_live_now_playing">Şimdi oynatılıyor</string>
+    <string name="tv_live_badge">CANLI</string>
+    <string name="tv_live_behind">Canlının %1$s gerisinde</string>
+    <string name="tv_channel_list_title">Kanallar</string>
+
+    <string name="tv_action_update_links">Linkleri güncelle</string>
+    <string name="tv_action_open_diagnostics">Tanılama</string>
+    <string name="tv_action_revalidate">Yeniden doğrula</string>
+    <string name="tv_action_repair_channel">Bu kanalı onar</string>
+    <string name="tv_action_next_channel">Sonraki kanal</string>
+    <string name="tv_action_go_live">Canlıya dön</string>
+
+    <string name="tv_link_progress_fetching">Kaynaklar alınıyor… %1$d/%2$d</string>
+    <string name="tv_link_progress_matching">Kanallar eşleştiriliyor…</string>
+    <string name="tv_link_progress_validating">Linkler test ediliyor… %1$d/%2$d</string>
+    <string name="tv_link_progress_saving">Kaydediliyor…</string>
+    <string name="tv_link_summary">Linkler: %1$d güncellendi, %2$d değişmedi, %3$d hâlâ çalışmıyor. İncelenecek yeni benzer eşleşme: %4$d</string>
+    <string name="tv_link_update_failed">Linkler güncellenemedi. Ağı kontrol edip tekrar deneyin.</string>
+    <string name="tv_link_switching_source">Kaynak değiştiriliyor… (%1$d/%2$d)</string>
+    <string name="tv_link_back_to_live">Canlı yayına dönüldü</string>
+    <string name="tv_link_repairing">%1$s onarılıyor…</string>
+    <string name="tv_link_repaired">%1$s onarıldı</string>
+    <string name="tv_link_repair_failed">%1$s için çalışan link bulunamadı</string>
+
+    <string name="tv_player_error_title">%1$s açılamıyor</string>
+    <string name="tv_player_error_body">Bilinen tüm linkler başarısız oldu. Onarım yalnızca bu kanal için yeni linkleri test eder.</string>
+    <string name="tv_player_error_no_link">Bu kanal için henüz link yok.</string>
+    <string name="tv_player_paused">Duraklatıldı</string>
+    <string name="tv_player_hint_live">OK: kanal listesi · ◀ ▶: geri sar · ▲ ▼: kanal değiştir</string>
+    <string name="tv_player_hint_timeshift">OK: duraklat veya oynat · ◀ ▶: 10 saniye · Geri: gizle</string>
+    <string name="tv_number_not_found">%1$d numaralı kanal yok</string>
+
+    <string name="tv_status_ok">Çalışıyor</string>
+    <string name="tv_status_stale">Son bilinen link</string>
+    <string name="tv_status_untested">Henüz test edilmedi</string>
+    <string name="tv_status_failing">Çalışmıyor</string>
+    <string name="tv_status_no_link">Henüz link yok</string>
+
+    <string name="tv_tier_pinned">Sabitlenmiş</string>
+    <string name="tv_tier_exact">Tam kimlik</string>
+    <string name="tv_tier_alias">Takma ad</string>
+    <string name="tv_tier_fuzzy">Benzer ad</string>
+
+    <string name="tv_diagnostics_title">Tanılama</string>
+    <string name="tv_diagnostics_subtitle">Her kanalın birincil ve yedek linkleri, nereden geldikleri ve neden başarısız oldukları.</string>
+    <string name="tv_diag_primary">Birincil</string>
+    <string name="tv_diag_fallback">Yedek %1$d</string>
+    <string name="tv_diag_checked">%1$s kontrol edildi</string>
+    <string name="tv_diag_never_checked">Hiç kontrol edilmedi</string>
+    <string name="tv_diag_reason">Neden: %1$s</string>
+    <string name="tv_diag_headers">Özel başlıklar</string>
+    <string name="tv_diag_source">Kaynak: %1$s</string>
+    <string name="tv_diag_official_page">Resmî sayfa: %1$s</string>
+    <string name="tv_diag_empty">Bu kanal için kayıtlı link yok. Linkleri güncelleyin.</string>
+    <string name="tv_diag_source_errors">Erişilemeyen kaynaklar: %1$s</string>
+
+    <string name="tv_settings_start_last">Son kanalla başla</string>
+    <string name="tv_settings_auto_update">Linkleri otomatik güncelle</string>
+    <string name="tv_settings_registry_url">Kayıt adresi</string>
+    <string name="tv_settings_registry_url_hint">channels.json, sources.json ve playlist.m3u dosyalarının bulunduğu klasör</string>
+    <string name="tv_settings_save">Kaydet</string>
+    <string name="tv_settings_reset">Sıfırla</string>
+    <string name="tv_settings_on">Açık</string>
+    <string name="tv_settings_off">Kapalı</string>
+
+    <string name="tv_settings_official_links">Resmî sitelerden linkler</string>
+    <string name="tv_settings_official_links_state">%1$s · Yalnızca kişisel izleme</string>
+    <string name="tv_status_external">YouTube\'da açılır</string>
+    <string name="tv_handoff_title">%1$s YouTube\'da yayında</string>
+    <string name="tv_handoff_body">Bu kanalın resmî canlı yayını YouTube\'da. YouTube uygulamasında açılır.</string>
+    <string name="tv_action_open_youtube">YouTube\'da aç</string>
+    <string name="tv_youtube_missing">Bu TV\'de YouTube uygulaması yüklü değil</string>
+</resources>

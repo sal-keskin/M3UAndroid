@@ -174,6 +174,9 @@ fun TvBrowsePane(
                     onPlay = onPlay
                 )
 
+                // rendered by App
+                TvDestination.Live, TvDestination.Diagnostics -> Unit
+
                 TvDestination.Favorites -> ChannelGridScreen(
                     title = stringResource(string.tv_favorites_title),
                     subtitle = stringResource(string.tv_favorites_subtitle),

@@ -17,6 +17,16 @@ object Converters {
     }
 
     @TypeConverter
+    fun fromStringMap(from: Map<String, String>?): String? {
+        return from?.let { Json.encodeToString(it) }
+    }
+
+    @TypeConverter
+    fun toStringMap(to: String?): Map<String, String>? {
+        return to?.let { runCatching { Json.decodeFromString<Map<String, String>>(it) }.getOrNull() }
+    }
+
+    @TypeConverter
     fun fromDataSource(from: DataSource): String = from.value
 
     @TypeConverter
