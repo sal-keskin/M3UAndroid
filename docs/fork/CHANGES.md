@@ -202,6 +202,7 @@ the TV find that link itself.
 | Show TV | The terms of use allow content watched on the site for personal, individual use only. They forbid commercial use, passing it to third parties, copying, reproducing and archiving. A general clause says any use of the site's content is subject to the company's permission. `robots.txt` disallows `/canli-yayin` only for `Googlebot-Video` | `webview` resolver. The link is read on the viewer's own TV and played for that viewer only. It is never cached to disk or published |
 | CNN Türk | `robots.txt` disallows `/*index.m3u8` for every agent and blocks AI agents entirely | **No resolver.** The channel shows "No link yet" unless a free public source carries it |
 | Sözcü TV | `robots.txt` allows all agents. The live page embeds Sözcü's own YouTube live | `youtube` resolver. The app reads only the video id and opens the **YouTube app**. It never extracts YouTube media |
+| NOW (reviewed 2026-10-18) | The live page declares signed links that expire after a few hours. The terms licence viewing only through NOW's own services, and forbid stream capture, playing, displaying or deep-linking content elsewhere, and circumventing access controls | **No resolver.** NOW keeps playing from the static TurkNet link that iptv-org lists (720p, a 30-minute live window) |
 
 ### How it works
 
