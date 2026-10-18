@@ -80,6 +80,7 @@ import com.m3u.data.service.PlayerManager
 import com.m3u.data.service.TimeshiftCache
 import dagger.hilt.android.qualifiers.ApplicationContext
 import io.ktor.http.Url
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
@@ -160,6 +161,20 @@ class PlayerManagerImpl @Inject constructor(
     private var activeChannel: Channel? = null
     private var stallJob: Job? = null
     private var lastBackToLiveAt = 0L
+
+    // registry CDNs can take tens of seconds to answer a live playlist; the 10 s default gave up
+    private val registryOkHttpClient: OkHttpClient by lazy {
+        okHttpClient.newBuilder()
+            .readTimeout(REGISTRY_READ_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+            .build()
+    }
+
+    // recovery: reload a url that was playing, and retry the whole list after every url failed
+    private var activeStreamPlayed = false
+    private var reloadCount = 0
+    private var lastReloadAt = 0L
+    private var listRetries = 0
+    private var recoveryJob: Job? = null
     private val registryPlayback: Boolean get() = activeStreams.isNotEmpty()
 
     override val sourceState = MutableStateFlow<PlaybackSourceState?>(null)
@@ -350,6 +365,7 @@ class PlayerManagerImpl @Inject constructor(
                 activeStreams = registryStreams
                 activeStreamIndex = 0
                 activeChannel = channel
+                resetRecovery()
                 sourceState.value = registryStreams.firstOrNull()?.let { stream ->
                     PlaybackSourceState(
                         index = 0,
@@ -618,6 +634,7 @@ class PlayerManagerImpl @Inject constructor(
             activeChannel = null
             stallJob?.cancel()
             stallJob = null
+            resetRecovery()
             sourceState.value = null
             activeProviderPlayback = false
             activeProviderPlaybackAllowsCrossOrigin = false
@@ -821,6 +838,8 @@ class PlayerManagerImpl @Inject constructor(
                 headers = requestHeaders,
                 allowCrossOriginRequests = providerPlaybackAllowsCrossOrigin,
             )
+        } else if (registryPlayback) {
+            registryOkHttpClient
         } else {
             okHttpClient
         }
@@ -854,7 +873,13 @@ class PlayerManagerImpl @Inject constructor(
     ) {
         providerSessionState.runIfCurrent(generation) {
             playbackState.value = state
-            if (registryPlayback) watchForStall(generation, state)
+            if (registryPlayback) {
+                if (state == Player.STATE_READY) {
+                    activeStreamPlayed = true
+                    listRetries = 0
+                }
+                watchForStall(generation, state)
+            }
             if (state == Player.STATE_ENDED) {
                 closeProviderSessionAsync(
                     session = providerSessionState.detach(generation),
@@ -935,7 +960,7 @@ class PlayerManagerImpl @Inject constructor(
                 }
 
                 PlaybackException.ERROR_CODE_IO_UNSPECIFIED if registryPlayback -> {
-                    failover(generation, exception, exception.errorCodeName)
+                    reloadOrFailover(generation, exception, exception.errorCodeName)
                 }
 
                 PlaybackException.ERROR_CODE_IO_UNSPECIFIED -> {
@@ -948,7 +973,7 @@ class PlayerManagerImpl @Inject constructor(
 
                 else if exception != null && registryPlayback -> {
                     timber.w(exception, "registry source failed: ${exception.errorCodeName}")
-                    failover(generation, exception, exception.reason())
+                    reloadOrFailover(generation, exception, exception.reason())
                 }
 
                 else -> {
@@ -1008,6 +1033,7 @@ class PlayerManagerImpl @Inject constructor(
     private fun failover(generation: Long, exception: PlaybackException?, reason: String) {
         stallJob?.cancel()
         stallJob = null
+        recoveryJob?.cancel()
         val streams = activeStreams
         val failedIndex = activeStreamIndex
         val failed = streams.getOrNull(failedIndex)
@@ -1019,8 +1045,7 @@ class PlayerManagerImpl @Inject constructor(
             }
         }
         val nextIndex = failedIndex + 1
-        val next = streams.getOrNull(nextIndex)
-        if (next == null) {
+        if (streams.getOrNull(nextIndex) == null) {
             timber.w("every registry url failed")
             sourceState.value = sourceState.value?.copy(exhausted = true)
             playbackException.value = exception ?: PlaybackException(
@@ -1029,29 +1054,92 @@ class PlayerManagerImpl @Inject constructor(
                 PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT,
             )
             sourceEvents.tryEmit(PlaybackSourceEvent.Exhausted)
+            retryListLater(generation)
             return
         }
         timber.d("switching to fallback ${nextIndex + 1}/${streams.size}")
-        activeStreamIndex = nextIndex
-        activeRequestHeaders = next.headers.withoutUserAgent()
-        activeChannelUserAgent = next.headers[PlaybackHeaders.USER_AGENT]
-        chain = registryMimetypeHint(next.url) ?: MimetypeChain.Unspecified(next.url)
+        sourceEvents.tryEmit(PlaybackSourceEvent.Switching(nextIndex, streams.size))
+        playStream(generation, nextIndex)
+    }
+
+    private fun playStream(generation: Long, index: Int) {
+        val stream = activeStreams.getOrNull(index) ?: return
+        activeStreamIndex = index
+        activeStreamPlayed = false
+        reloadCount = 0
+        activeRequestHeaders = stream.headers.withoutUserAgent()
+        activeChannelUserAgent = stream.headers[PlaybackHeaders.USER_AGENT]
+        chain = registryMimetypeHint(stream.url) ?: MimetypeChain.Unspecified(stream.url)
         playbackException.value = null
         sourceState.value = PlaybackSourceState(
-            index = nextIndex,
-            count = streams.size,
-            sourceId = next.sourceId,
-            height = next.height,
+            index = index,
+            count = activeStreams.size,
+            sourceId = stream.sourceId,
+            height = stream.height,
             exhausted = false,
         )
-        sourceEvents.tryEmit(PlaybackSourceEvent.Switching(nextIndex, streams.size))
         mainCoroutineScope.launch {
             tryPlay(
                 generation = generation,
-                url = next.url,
+                url = stream.url,
                 applyContinueWatching = false,
             )
         }
+    }
+
+    /**
+     * A url that was playing and then stalls or errors is usually fine again on a fresh start
+     * (some CDNs cut a session after a few minutes; zapping away and back fixes it). Reload it at
+     * the live edge, a few times, before giving up on it. A url that never started fails over.
+     */
+    private fun reloadOrFailover(generation: Long, exception: PlaybackException?, reason: String) {
+        val now = System.currentTimeMillis()
+        if (now - lastReloadAt > RELOAD_WINDOW_MS) reloadCount = 0
+        if (!activeStreamPlayed || reloadCount >= MAX_RELOADS) {
+            failover(generation, exception, reason)
+            return
+        }
+        stallJob?.cancel()
+        stallJob = null
+        recoveryJob?.cancel()
+        reloadCount++
+        lastReloadAt = now
+        timber.w("$reason: reloading the url ($reloadCount/$MAX_RELOADS)")
+        val stream = activeStreams.getOrNull(activeStreamIndex) ?: return
+        playbackException.value = null
+        recoveryJob = mainCoroutineScope.launch {
+            delay(RELOAD_DELAY_MS)
+            if (!providerSessionState.isCurrent(generation) || activeStreams.getOrNull(activeStreamIndex) != stream) {
+                return@launch
+            }
+            tryPlay(
+                generation = generation,
+                url = stream.url,
+                applyContinueWatching = false,
+            )
+        }
+    }
+
+    // every url failed: try the list again in the background a few times, as a viewer would
+    private fun retryListLater(generation: Long) {
+        val wait = LIST_RETRY_DELAYS_MS.getOrNull(listRetries) ?: return
+        listRetries++
+        recoveryJob?.cancel()
+        recoveryJob = mainCoroutineScope.launch {
+            delay(wait)
+            if (!providerSessionState.isCurrent(generation) || activeStreams.isEmpty()) return@launch
+            timber.d("retrying the channel's urls ($listRetries/${LIST_RETRY_DELAYS_MS.size})")
+            playStream(generation, 0)
+        }
+    }
+
+    private fun resetRecovery() {
+        recoveryJob?.cancel()
+        recoveryJob = null
+        activeStreamPlayed = false
+        reloadCount = 0
+        lastReloadAt = 0L
+        listRetries = 0
     }
 
     /**
@@ -1093,7 +1181,7 @@ class PlayerManagerImpl @Inject constructor(
                 sourceEvents.tryEmit(PlaybackSourceEvent.BackToLive)
             } else {
                 timber.w("stalled for ${STALL_TIMEOUT_MS}ms")
-                failover(generation, null, "stall")
+                reloadOrFailover(generation, null, "stall")
             }
         }
     }
@@ -1445,6 +1533,11 @@ fun VideoSize.toRect(): Rect {
 private const val STALL_TIMEOUT_MS = 10_000L
 private const val TIMESHIFT_BEHIND_LIVE_MS = 30_000L
 private const val BACK_TO_LIVE_COOLDOWN_MS = 30_000L
+private const val REGISTRY_READ_TIMEOUT_SECONDS = 30L
+private const val MAX_RELOADS = 3
+private const val RELOAD_WINDOW_MS = 90_000L
+private const val RELOAD_DELAY_MS = 1_000L
+private val LIST_RETRY_DELAYS_MS = longArrayOf(15_000L, 30_000L, 60_000L)
 private val TIMESHIFT_GONE_CODES = setOf(403, 404, 410)
 
 private data class PlaybackStateEvent(

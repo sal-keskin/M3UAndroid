@@ -189,6 +189,23 @@ On the Mi TV Stick (4.6 GB of storage), TR TV had filled the disk to 93 %.
   366 MB to 2.3 GB.
 - **Logos.** The Coil disk cache is capped at 32 MB instead of 2 % of the disk.
 
+## Recovery on slow or flaky streams
+
+NOW froze after 1–2 minutes on the Mi TV Stick, and zapping away and back fixed it.
+
+- **Cause.** NOW's only working link (TurkNet's CDN) accepts connections at once, but takes 1–38 s,
+  sometimes over 40 s, to answer a playlist request; it never serves one from cache. The player's
+  OkHttp client gave up after its default 10 s read timeout. Upstream's interceptor turns any client
+  exception into a fake HTTP **999** response, so the log showed `Response code: 999`. The failover
+  then moved to NOW's only other link, which is dead, and showed the error card.
+- **Patient requests.** Registry playback uses a client derived from the shared one, with a 30 s read
+  timeout (same connection pool and interceptors).
+- **Reload in place.** When a url that was playing stalls or errors, the player reloads that same url
+  at the live edge, as zapping away and back does, before failing over. It allows up to 3 reloads in
+  90 s, each after 1 s; a url that never started fails over at once. Reloads don't demote the url.
+- **Background retry.** When every url has failed, the error card shows, and the player tries the
+  channel's urls again after 15, 30 and 60 s. When one plays, the card goes away by itself.
+
 ## Phase 2: links from official live pages
 
 Some broadcasters offer their free live stream only through the player on their own website. The
